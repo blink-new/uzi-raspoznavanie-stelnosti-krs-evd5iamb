@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './com
 import { Progress } from './components/ui/progress'
 import { Badge } from './components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
+import { toast } from './hooks/use-toast'
 
 interface AnalysisResult {
   id: string
@@ -26,6 +27,8 @@ function App() {
   const [analysisHistory, setAnalysisHistory] = useState<AnalysisResult[]>([])
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const SUPABASE_FUNCTION_URL = 'https://rbqpkbojugjmgiwzefvb.supabase.co/functions/v1/upload-video'
 
   const handleVideoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -56,36 +59,80 @@ function App() {
   }
 
   const startAnalysis = async () => {
-    if (!selectedVideo) return
-    
+    if (!selectedVideo) {
+      toast({
+        title: 'Ошибка',
+        description: 'Видеофайл не выбран.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsAnalyzing(true)
     setAnalysisProgress(0)
-    
-    // Симуляция анализа
-    const interval = setInterval(() => {
-      setAnalysisProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          
-          // Симуляция результата
-          const result: AnalysisResult = {
-            id: Date.now().toString(),
-            filename: selectedVideo.name,
-            timestamp: new Date(),
-            pregnant: Math.random() > 0.4, // 60% вероятность стельности
-            confidence: Math.round(80 + Math.random() * 15), // 80-95% уверенность
-            duration: Math.round(Math.random() * 30 + 10), // 10-40 секунд
-            frameAnalyzed: Math.round(Math.random() * 500 + 100) // 100-600 кадров
-          }
-          
-          setCurrentResult(result)
-          setAnalysisHistory(prev => [result, ...prev])
-          setIsAnalyzing(false)
-          return 100
-        }
-        return prev + Math.random() * 15
+    setCurrentResult(null)
+
+    const formData = new FormData()
+    formData.append('video', selectedVideo)
+
+    let progress = 0
+    const progressInterval = setInterval(() => {
+      progress += 10
+      if (progress <= 70) {
+        setAnalysisProgress(progress)
+      }
+      if (progress >= 100) {
+        clearInterval(progressInterval)
+      }
+    }, 150)
+
+    try {
+      const response = await fetch(SUPABASE_FUNCTION_URL, {
+        method: 'POST',
+        body: formData,
       })
-    }, 200)
+
+      clearInterval(progressInterval)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Ошибка сервера: ${response.status}`)
+      }
+
+      const resultData = await response.json()
+      console.log('Ответ от функции:', resultData)
+
+      setAnalysisProgress(100)
+
+      const simulatedResult: AnalysisResult = {
+        id: Date.now().toString(),
+        filename: resultData.filename || selectedVideo.name,
+        timestamp: new Date(),
+        pregnant: Math.random() > 0.4,
+        confidence: Math.round(80 + Math.random() * 15),
+        duration: Math.round(videoRef.current?.duration || Math.random() * 30 + 10),
+        frameAnalyzed: Math.round(Math.random() * 500 + 100),
+      }
+
+      setCurrentResult(simulatedResult)
+      setAnalysisHistory(prev => [simulatedResult, ...prev])
+      toast({
+        title: 'Анализ завершен',
+        description: `Файл ${simulatedResult.filename} успешно проанализирован.`,
+      })
+
+    } catch (error) {
+      console.error('Ошибка при анализе видео:', error)
+      clearInterval(progressInterval)
+      setAnalysisProgress(0)
+      toast({
+        title: 'Ошибка анализа',
+        description: error instanceof Error ? error.message : 'Произошла неизвестная ошибка',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsAnalyzing(false)
+    }
   }
 
   const formatDate = (date: Date) => {
@@ -94,7 +141,7 @@ function App() {
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   }
 
@@ -262,7 +309,7 @@ function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="text-center p-6 rounded-lg bg-white">
-                        <Badge 
+                        <Badge
                           variant={currentResult.pregnant ? "default" : "destructive"}
                           className="text-lg px-4 py-2 mb-3"
                         >
@@ -335,7 +382,7 @@ function App() {
                         </div>
                         
                         <div className="text-right">
-                          <Badge 
+                          <Badge
                             variant={result.pregnant ? "default" : "destructive"}
                             className="mb-1"
                           >
