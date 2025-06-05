@@ -15,6 +15,10 @@ interface AnalysisResult {
   confidence: number
   duration: number
   frameAnalyzed: number
+  videoId?: string
+  // Добавляем size и type
+  size: number
+  type: string
 }
 
 function App() {
@@ -104,14 +108,23 @@ function App() {
 
       setAnalysisProgress(100)
 
+      const video_id = resultData.video_id
+      const filename = resultData.filename
+      const size = resultData.size
+      const type = resultData.type
+
       const simulatedResult: AnalysisResult = {
-        id: Date.now().toString(),
-        filename: resultData.filename || selectedVideo.name,
+        id: Date.now().toString(), // В будущем можно использовать video_id или analysis_id
+        videoId: video_id, // Сохраняем video_id
+        filename: filename || selectedVideo.name,
         timestamp: new Date(),
-        pregnant: Math.random() > 0.4,
+        pregnant: Math.random() > 0.4, // Случайный результат для демонстрации
         confidence: Math.round(80 + Math.random() * 15),
         duration: Math.round(videoRef.current?.duration || Math.random() * 30 + 10),
         frameAnalyzed: Math.round(Math.random() * 500 + 100),
+        // Добавляем size и type из ответа бэкенда
+        size: size,
+        type: type,
       }
 
       setCurrentResult(simulatedResult)
@@ -328,12 +341,16 @@ function App() {
                         <span className="font-medium">{currentResult.filename}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Время анализа:</span>
-                        <span className="font-medium">{currentResult.duration}с</span>
+                        <span className="text-gray-600">Размер:</span>
+                        <span className="font-medium">{(currentResult.size / 1024 / 1024).toFixed(1)} MB</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Кадров проанализировано:</span>
-                        <span className="font-medium">{currentResult.frameAnalyzed}</span>
+                        <span className="text-gray-600">Тип:</span>
+                        <span className="font-medium">{currentResult.type}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Время анализа:</span>
+                        <span className="font-medium">{currentResult.duration}с</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Дата:</span>
@@ -377,6 +394,9 @@ function App() {
                             <p className="font-medium">{result.filename}</p>
                             <p className="text-sm text-gray-600">
                               {formatDate(result.timestamp)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {(result.size / 1024 / 1024).toFixed(1)} MB, {result.type}
                             </p>
                           </div>
                         </div>

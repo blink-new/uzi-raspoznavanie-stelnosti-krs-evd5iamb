@@ -75,11 +75,40 @@ serve(async (req) => {
 
     console.log('File uploaded successfully:', publicUrl)
 
+    // Вставляем запись о видео в базу данных
+    const { data: videoData, error: dbError } = await supabase
+      .from('videos')
+      .insert([
+        {
+          filename: file.name,
+          size: file.size,
+          mime_type: file.type,
+          storage_path: filePath,
+          public_url: publicUrl,
+          // user_id пока не добавляем, так как нет аутентификации
+        },
+      ])
+      .select('id') // Выбираем ID новой записи
+      .single(); // Ожидаем одну запись
+
+    if (dbError || !videoData) {
+      console.error('Error inserting video record into database:', dbError)
+      // Удаляем файл из Storage, если запись в БД не удалась
+      await supabase.storage.from('uzi-videos').remove([filePath]);
+      return new Response(JSON.stringify({ error: dbError?.message || 'Failed to save video record' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log('Video record created in database:', videoData);
+
     // Здесь будет логика отправки файла в AI сервис
-    // Вместо возврата информации о файле, возвращаем URL
+    // Вместо возврата информации о файле, возвращаем URL и ID видео из БД
 
     return new Response(JSON.stringify({
-      message: 'Video uploaded and ready for analysis',
+      message: 'Video uploaded and record created',
+      video_id: videoData.id, // Возвращаем ID видео из БД
       filename: file.name,
       size: file.size,
       type: file.type,
